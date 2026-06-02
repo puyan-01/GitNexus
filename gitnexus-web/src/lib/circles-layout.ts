@@ -51,6 +51,7 @@ const TYPE_TO_RING: Record<string, number> = {
 
   // Ring 2 – type definitions
   Class: 2,
+  Component: 2,
   Interface: 2,
   Enum: 2,
   Type: 2,

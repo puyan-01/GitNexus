@@ -231,6 +231,7 @@ export interface ExtractedFetchCall {
   filePath: string;
   fetchURL: string;
   lineNumber: number;
+  reason?: string;
 }
 
 export interface FetchWrapperDef {
@@ -1057,6 +1058,183 @@ export function extractORMQueries(
 }
 
 // ============================================================================
+// HarmonyOS HMRouter + ArkUI Component Detection
+// ============================================================================
+
+const HARMONY_ROUTER_DECORATOR_RE = /@HMRouter\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
+const HARMONY_ROUTER_MGR_CALL_RE =
+  /\bHMRouterMgr\.(push|replace|replaceAsync|pop)\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
+const HARMONY_PATH_STACK_CALL_RE =
+  /\.(pushPath|replacePath)\s*\(\s*\{([\s\S]*?)\}\s*(?:,|\))/g;
+const HARMONY_PROPERTY_RE = (propertyName: string): RegExp =>
+  new RegExp(`\\b${propertyName}\\s*:\\s*([^,}\\n]+)`);
+const HARMONY_COMPONENT_DECL_RE =
+  /((?:\s*@[\w$]+(?:\s*\([^)]*\))?\s*)+)\s*(?:export\s+)?(?:default\s+)?(?:struct|class)\s+([A-Za-z_$][\w$]*)/g;
+const HARMONY_COMPONENT_DECORATORS = new Set(['Component', 'ComponentV2', 'CustomDialog']);
+const HARMONY_COMPONENT_METADATA_DECORATORS = new Set([
+  'Entry',
+  'HMRouter',
+  'Component',
+  'ComponentV2',
+  'CustomDialog',
+]);
+
+const normalizeHarmonyRouteValue = (rawValue: string): string | null => {
+  const value = rawValue.trim().replace(/;$/, '').trim();
+  const literal = value.match(/^['"`]([^'"`]+)['"`]$/);
+  if (literal) return literal[1];
+  const routerName = value.match(/^RouterName\.([A-Za-z_$][\w$]*)$/);
+  if (routerName) return routerName[1];
+  return null;
+};
+
+const extractHarmonyRouteProperty = (objectText: string, propertyName: string): string | null => {
+  const match = objectText.match(HARMONY_PROPERTY_RE(propertyName));
+  if (!match) return null;
+  return normalizeHarmonyRouteValue(match[1]);
+};
+
+const lineNumberAt = (content: string, index: number): number =>
+  content.substring(0, index).split('\n').length - 1;
+
+const extractDecoratorNames = (decoratorBlock: string): string[] => {
+  const names: string[] = [];
+  const re = /@([A-Za-z_$][\w$]*)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(decoratorBlock)) !== null) {
+    names.push(match[1]);
+  }
+  return names;
+};
+
+const findDeclarationEndLine = (content: string, fromIndex: number): number => {
+  const openIndex = content.indexOf('{', fromIndex);
+  if (openIndex < 0) return lineNumberAt(content, fromIndex) + 1;
+  let depth = 0;
+  for (let i = openIndex; i < content.length; i++) {
+    const ch = content[i];
+    if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) return lineNumberAt(content, i) + 1;
+    }
+  }
+  return lineNumberAt(content, openIndex) + 1;
+};
+
+const preprocessHarmonyStructs = (content: string): string =>
+  content.replace(/\bstruct\s+([A-Za-z_$][\w$]*)/g, 'class $1');
+
+export function extractHarmonyRoutes(
+  filePath: string,
+  content: string,
+  decoratorRoutesOut: ExtractedDecoratorRoute[],
+  fetchCallsOut: ExtractedFetchCall[],
+): void {
+  if (!filePath.endsWith('.ets') && !content.includes('HMRouter')) return;
+
+  HARMONY_ROUTER_DECORATOR_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = HARMONY_ROUTER_DECORATOR_RE.exec(content)) !== null) {
+    const routePath = extractHarmonyRouteProperty(match[1], 'pageUrl');
+    if (!routePath) continue;
+    decoratorRoutesOut.push({
+      filePath,
+      routePath,
+      httpMethod: 'PAGE',
+      decoratorName: 'HMRouter',
+      lineNumber: lineNumberAt(content, match.index),
+    });
+  }
+
+  HARMONY_ROUTER_MGR_CALL_RE.lastIndex = 0;
+  while ((match = HARMONY_ROUTER_MGR_CALL_RE.exec(content)) !== null) {
+    const routePath = extractHarmonyRouteProperty(match[2], 'pageUrl');
+    if (!routePath) continue;
+    fetchCallsOut.push({
+      filePath,
+      fetchURL: `/${routePath}`,
+      lineNumber: lineNumberAt(content, match.index),
+      reason: `harmony-router-${match[1]}`,
+    });
+  }
+
+  HARMONY_PATH_STACK_CALL_RE.lastIndex = 0;
+  while ((match = HARMONY_PATH_STACK_CALL_RE.exec(content)) !== null) {
+    const routePath = extractHarmonyRouteProperty(match[2], 'name');
+    if (!routePath) continue;
+    fetchCallsOut.push({
+      filePath,
+      fetchURL: `/${routePath}`,
+      lineNumber: lineNumberAt(content, match.index),
+      reason: `harmony-path-stack-${match[1]}`,
+    });
+  }
+}
+
+export function extractHarmonyComponents(
+  filePath: string,
+  content: string,
+  nodesOut: ParsedNode[],
+  relationshipsOut: ParsedRelationship[],
+): void {
+  if (
+    !filePath.endsWith('.ets') ||
+    (!content.includes('@Component') && !content.includes('@CustomDialog'))
+  ) {
+    return;
+  }
+
+  HARMONY_COMPONENT_DECL_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = HARMONY_COMPONENT_DECL_RE.exec(content)) !== null) {
+    const decorators = extractDecoratorNames(match[1]);
+    const componentDecorators = decorators.filter((name) => HARMONY_COMPONENT_DECORATORS.has(name));
+    if (componentDecorators.length === 0) continue;
+
+    const metadataDecorators = decorators.filter((name) =>
+      HARMONY_COMPONENT_METADATA_DECORATORS.has(name),
+    );
+    const isPage = decorators.includes('Entry') || decorators.includes('HMRouter');
+    const name = match[2];
+    const startLine = lineNumberAt(content, match.index) + 1;
+    const endLine = findDeclarationEndLine(content, match.index + match[0].length);
+    const componentKind = componentDecorators.includes('CustomDialog')
+      ? 'CustomDialog'
+      : componentDecorators.includes('ComponentV2')
+        ? 'ComponentV2'
+        : 'Component';
+    const nodeId = generateId('Component', `${filePath}:${name}`);
+    nodesOut.push({
+      id: nodeId,
+      label: 'Component',
+      properties: {
+        name,
+        filePath,
+        startLine,
+        endLine,
+        language: SupportedLanguages.TypeScript,
+        isExported: false,
+        decorators: metadataDecorators.length > 0 ? metadataDecorators : componentDecorators,
+        componentKind,
+        isDialog: componentKind === 'CustomDialog',
+        isPage,
+        routePath: extractHarmonyRouteProperty(match[1], 'pageUrl') || '',
+      },
+    });
+    relationshipsOut.push({
+      id: generateId('DEFINES', `${generateId('File', filePath)}->${nodeId}`),
+      sourceId: generateId('File', filePath),
+      targetId: nodeId,
+      type: 'DEFINES',
+      confidence: 1.0,
+      reason: 'harmony-component',
+    });
+  }
+}
+
+// ============================================================================
 // FastAPI router prefix detection (Python)
 // ============================================================================
 //
@@ -1112,6 +1290,9 @@ const processFileGroup = (
       parseContent = extracted.scriptContent;
       lineOffset = extracted.lineOffset;
       isVueSetup = extracted.isSetup;
+    }
+    if (file.path.endsWith('.ets')) {
+      parseContent = preprocessHarmonyStructs(parseContent);
     }
 
     // Per-language source-text transform (e.g., UE macro stripping for C++).
@@ -2148,6 +2329,10 @@ const processFileGroup = (
       const extractedRoutes = extractLaravelRoutes(tree, file.path);
       for (const r of extractedRoutes) result.routes.push(r);
     }
+
+    // HarmonyOS ArkTS: page registrations, navigation calls, and UI components.
+    extractHarmonyRoutes(file.path, file.content, result.decoratorRoutes, result.fetchCalls);
+    extractHarmonyComponents(file.path, file.content, result.nodes, result.relationships);
 
     // Extract ORM queries (Prisma, Supabase)
     extractORMQueries(file.path, parseContent, result.ormQueries);

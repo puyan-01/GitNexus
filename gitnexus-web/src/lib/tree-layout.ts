@@ -30,6 +30,7 @@ const TYPE_TO_LAYER: Record<string, number> = {
 
   // Layer 2: Type definitions
   Class: 2,
+  Component: 2,
   Interface: 2,
   Enum: 2,
   Type: 2,

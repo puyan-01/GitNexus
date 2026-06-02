@@ -20,6 +20,7 @@ export const NODE_COLORS: Record<NodeLabel, string> = {
   Community: '#818cf8', // Indigo light - cluster indicator
   Process: '#f43f5e', // Rose - execution flow indicator
   Section: '#60a5fa', // Blue light - structural section
+  Component: '#0ea5e9', // Sky - UI component
   Struct: '#f59e0b', // Amber - like Class
   Trait: '#ec4899', // Pink - like Interface
   Impl: '#14b8a6', // Teal - like Method
@@ -61,6 +62,7 @@ export const NODE_SIZES: Record<NodeLabel, number> = {
   Community: 0, // Hidden by default - metadata node
   Process: 0, // Hidden by default - metadata node
   Section: 8, // Structural section - similar to Folder
+  Component: 7, // UI component
   Struct: 8, // Like Class
   Trait: 7, // Like Interface
   Impl: 3, // Like Method
@@ -111,6 +113,7 @@ export const DEFAULT_VISIBLE_LABELS: NodeLabel[] = [
   'Folder',
   'File',
   'Class',
+  'Component',
   'Function',
   'Method',
   'Property', // Kotlin/Java fields (HAS_PROPERTY + DEFINES File→Property)
@@ -125,6 +128,7 @@ export const FILTERABLE_LABELS: NodeLabel[] = [
   'Folder',
   'File',
   'Class',
+  'Component',
   'Interface',
   'Enum',
   'Type',
@@ -138,7 +142,16 @@ export const FILTERABLE_LABELS: NodeLabel[] = [
 ];
 
 // Edge/Relation types
-export type EdgeType = 'CONTAINS' | 'DEFINES' | 'IMPORTS' | 'CALLS' | 'EXTENDS' | 'IMPLEMENTS';
+export type EdgeType =
+  | 'CONTAINS'
+  | 'DEFINES'
+  | 'IMPORTS'
+  | 'CALLS'
+  | 'EXTENDS'
+  | 'IMPLEMENTS'
+  | 'USES_COMPONENT'
+  | 'ROUTE_COMPONENT'
+  | 'USES_CLASS';
 
 export const ALL_EDGE_TYPES: EdgeType[] = [
   'CONTAINS',
@@ -147,6 +160,9 @@ export const ALL_EDGE_TYPES: EdgeType[] = [
   'CALLS',
   'EXTENDS',
   'IMPLEMENTS',
+  'USES_COMPONENT',
+  'ROUTE_COMPONENT',
+  'USES_CLASS',
 ];
 
 // Default visible edges (CALLS hidden by default to reduce clutter)
@@ -157,6 +173,9 @@ export const DEFAULT_VISIBLE_EDGES: EdgeType[] = [
   'EXTENDS',
   'IMPLEMENTS',
   'CALLS',
+  'USES_COMPONENT',
+  'ROUTE_COMPONENT',
+  'USES_CLASS',
 ];
 
 // Edge display info for UI
@@ -167,4 +186,7 @@ export const EDGE_INFO: Record<EdgeType, { color: string; label: string }> = {
   CALLS: { color: '#7c3aed', label: 'Calls' },
   EXTENDS: { color: '#c2410c', label: 'Extends' },
   IMPLEMENTS: { color: '#be185d', label: 'Implements' },
+  USES_COMPONENT: { color: '#0284c7', label: 'Uses component' },
+  ROUTE_COMPONENT: { color: '#e11d48', label: 'Route component' },
+  USES_CLASS: { color: '#ca8a04', label: 'Uses class' },
 };

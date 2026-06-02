@@ -251,6 +251,10 @@ export const streamAllCSVsToDisk = async (
     path.join(csvDir, 'codeelement.csv'),
     codeElementHeader,
   );
+  const componentWriter = new BufferedCSVWriter(
+    path.join(csvDir, 'component.csv'),
+    'id,name,filePath,startLine,endLine,isExported,content,description,componentKind,decorators,isDialog,isPage,routePath',
+  );
   const communityWriter = new BufferedCSVWriter(
     path.join(csvDir, 'community.csv'),
     'id,label,heuristicLabel,keywords,description,enrichedBy,cohesion,symbolCount',
@@ -441,6 +445,35 @@ export const streamAllCSVsToDisk = async (
         );
         break;
       }
+      case 'Component': {
+        const content = await extractContent(node, contentCache);
+        const decorators = Array.isArray(node.properties.decorators)
+          ? node.properties.decorators.filter((d): d is string => typeof d === 'string')
+          : [];
+        const decoratorsStr = `[${decorators.map((d: string) => `'${d.replace(/'/g, "''")}'`).join(',')}]`;
+        const componentKind =
+          typeof node.properties.componentKind === 'string' ? node.properties.componentKind : '';
+        const routePath =
+          typeof node.properties.routePath === 'string' ? node.properties.routePath : '';
+        await componentWriter.addRow(
+          [
+            escapeCSVField(node.id),
+            escapeCSVField(node.properties.name || ''),
+            escapeCSVField(node.properties.filePath || ''),
+            escapeCSVNumber(node.properties.startLine, -1),
+            escapeCSVNumber(node.properties.endLine, -1),
+            node.properties.isExported ? 'true' : 'false',
+            escapeCSVField(content),
+            escapeCSVField(node.properties.description || ''),
+            escapeCSVField(componentKind),
+            escapeCSVField(decoratorsStr),
+            node.properties.isDialog ? 'true' : 'false',
+            node.properties.isPage ? 'true' : 'false',
+            escapeCSVField(routePath),
+          ].join(','),
+        );
+        break;
+      }
       case 'Tool':
         await toolWriter.addRow(
           [
@@ -503,6 +536,7 @@ export const streamAllCSVsToDisk = async (
     interfaceWriter,
     methodWriter,
     codeElemWriter,
+    componentWriter,
     communityWriter,
     processWriter,
     sectionWriter,
@@ -539,6 +573,7 @@ export const streamAllCSVsToDisk = async (
     ['Interface', interfaceWriter],
     ['Method', methodWriter],
     ['CodeElement', codeElemWriter],
+    ['Component', componentWriter],
     ['Community', communityWriter],
     ['Process', processWriter],
     ['Section' as NodeTableName, sectionWriter],

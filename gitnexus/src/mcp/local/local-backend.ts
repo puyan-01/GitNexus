@@ -10,8 +10,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import {
   initLbug,
-  executeQuery,
-  executeParameterized,
+  executeQuery as executeLocalQuery,
+  executeParameterized as executeLocalParameterized,
   closeLbug,
   isLbugReady,
 } from '../../core/lbug/pool-adapter.js';
@@ -53,6 +53,128 @@ import { logger } from '../../core/logger.js';
 // AI context generation is CLI-only (gitnexus analyze)
 // import { generateAIContextFiles } from '../../cli/ai-context.js';
 
+const HTTP_PROXY_BASE = process.env.GITNEXUS_MCP_HTTP_BASE || 'http://localhost:4747';
+const HTTP_PROXY_HEALTH_URL = `${HTTP_PROXY_BASE}/api/health`;
+const HTTP_PROXY_TIMEOUT_MS = Number(process.env.GITNEXUS_MCP_HTTP_TIMEOUT_MS || 30000);
+const HTTP_PROXY_PROBE_TTL_MS = 2000;
+
+const httpProxyCache = new Map<string, { checkedAt: number; repoName: string | null }>();
+
+const normalizeRepoId = (value: unknown): string => String(value || '').trim().toLowerCase();
+
+const withTimeoutSignal = (
+  timeoutMs: number,
+): { signal: AbortSignal; done: () => void } => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, done: () => clearTimeout(timer) };
+};
+
+const isDbLockError = (err: unknown): boolean => {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes('Error 33') ||
+    msg.includes('locked a portion of the file') ||
+    msg.includes('Cannot read from file') ||
+    msg.includes('LadybugDB unavailable')
+  );
+};
+
+const fetchJson = async (
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = HTTP_PROXY_TIMEOUT_MS,
+): Promise<unknown> => {
+  const timeout = withTimeoutSignal(timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: timeout.signal });
+    const text = await response.text();
+    let data: unknown = null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
+    }
+    if (!response.ok) {
+      const message =
+        data && typeof data === 'object' && 'error' in data
+          ? (data as { error: unknown }).error
+          : `HTTP ${response.status}`;
+      throw new Error(String(message));
+    }
+    return data;
+  } finally {
+    timeout.done();
+  }
+};
+
+const resolveHttpProxyRepo = async (repoId: string): Promise<string | null> => {
+  const now = Date.now();
+  const cached = httpProxyCache.get(repoId);
+  if (cached && now - cached.checkedAt < HTTP_PROXY_PROBE_TTL_MS) return cached.repoName;
+
+  try {
+    await fetchJson(HTTP_PROXY_HEALTH_URL, {}, 1000);
+    const repos = await fetchJson(`${HTTP_PROXY_BASE}/api/repos`, {}, 1500);
+    const wanted = normalizeRepoId(repoId);
+    const found = Array.isArray(repos)
+      ? repos.find((repo) => normalizeRepoId((repo as { name?: unknown }).name) === wanted)
+      : null;
+    const repoName = found && typeof found === 'object' ? String((found as { name: unknown }).name) : null;
+    httpProxyCache.set(repoId, { checkedAt: now, repoName });
+    return repoName;
+  } catch {
+    httpProxyCache.set(repoId, { checkedAt: now, repoName: null });
+    return null;
+  }
+};
+
+const executeHttpQuery = async (
+  repoId: string,
+  cypher: string,
+  params?: Record<string, unknown>,
+): Promise<any[]> => {
+  const repoName = await resolveHttpProxyRepo(repoId);
+  if (!repoName) throw new Error('GitNexus HTTP proxy is not available for this repo');
+  const payload = params && Object.keys(params).length > 0 ? { cypher, params } : { cypher };
+  const data = await fetchJson(`${HTTP_PROXY_BASE}/api/query?repo=${encodeURIComponent(repoName)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return data && typeof data === 'object' && 'result' in data
+    ? ((data as { result: any[] }).result ?? [])
+    : [];
+};
+
+const executeQuery = async (repoId: string, cypher: string): Promise<any[]> => {
+  const proxyRepo = await resolveHttpProxyRepo(repoId);
+  if (proxyRepo) return executeHttpQuery(repoId, cypher);
+  try {
+    return await executeLocalQuery(repoId, cypher);
+  } catch (err) {
+    if (isDbLockError(err)) return executeHttpQuery(repoId, cypher);
+    throw err;
+  }
+};
+
+const executeParameterized = async (
+  repoId: string,
+  cypher: string,
+  params: Record<string, unknown>,
+): Promise<any[]> => {
+  const proxyRepo = await resolveHttpProxyRepo(repoId);
+  if (proxyRepo) return executeHttpQuery(repoId, cypher, params);
+  try {
+    return await executeLocalParameterized(repoId, cypher, params);
+  } catch (err) {
+    if (isDbLockError(err)) return executeHttpQuery(repoId, cypher, params);
+    throw err;
+  }
+};
+
 /**
  * Quick test-file detection for filtering impact results.
  * Matches common test file patterns across all supported languages.
@@ -89,6 +211,7 @@ export const VALID_NODE_LABELS = new Set([
   'CodeElement',
   'Community',
   'Process',
+  'Component',
   'Struct',
   'Enum',
   'Macro',
@@ -128,6 +251,9 @@ export const VALID_RELATION_TYPES = new Set([
   'HANDLES_TOOL',
   'ENTRY_POINT_OF',
   'WRAPS',
+  'USES_COMPONENT',
+  'ROUTE_COMPONENT',
+  'USES_CLASS',
 ]);
 
 /**
@@ -161,6 +287,9 @@ export const IMPACT_RELATION_CONFIDENCE: Readonly<Record<string, number>> = {
   HAS_PROPERTY: 0.95,
   ACCESSES: 0.8,
   CONTAINS: 0.95,
+  USES_COMPONENT: 0.9,
+  ROUTE_COMPONENT: 0.95,
+  USES_CLASS: 0.9,
 };
 
 /**
@@ -691,6 +820,9 @@ export class LocalBackend {
       await initLbug(repoId, handle.lbugPath);
       this.initializedRepos.add(repoId);
     } catch (err: any) {
+      if (isDbLockError(err) && (await resolveHttpProxyRepo(repoId))) {
+        return;
+      }
       // If lock error, mark as not initialized so next call retries
       this.initializedRepos.delete(repoId);
       throw err;
@@ -1433,7 +1565,7 @@ export class LocalBackend {
   ): Promise<any> {
     await this.ensureInitialized(repo.id);
 
-    if (!isLbugReady(repo.id)) {
+    if (!isLbugReady(repo.id) && !(await resolveHttpProxyRepo(repo.id))) {
       return { error: 'LadybugDB not ready. Index may be corrupted.' };
     }
     if (request.params !== undefined && !isValidQueryParams(request.params)) {
@@ -1981,7 +2113,7 @@ export class LocalBackend {
       repo.id,
       `
       MATCH (caller)-[r:CodeRelation]->(n {id: $symId})
-      WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'HAS_METHOD', 'HAS_PROPERTY', 'METHOD_OVERRIDES', 'OVERRIDES', 'METHOD_IMPLEMENTS', 'ACCESSES']
+      WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'HAS_METHOD', 'HAS_PROPERTY', 'METHOD_OVERRIDES', 'OVERRIDES', 'METHOD_IMPLEMENTS', 'ACCESSES', 'USES_COMPONENT', 'ROUTE_COMPONENT', 'USES_CLASS']
       RETURN r.type AS relType, caller.id AS uid, caller.name AS name, caller.filePath AS filePath, labels(caller)[0] AS kind
       LIMIT 30
     `,
@@ -2030,7 +2162,7 @@ export class LocalBackend {
             MATCH (n)-[hm:CodeRelation]->(ctor:Constructor)
             WHERE n.id = $symId AND hm.type = 'HAS_METHOD'
             MATCH (caller)-[r:CodeRelation]->(ctor)
-            WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'ACCESSES']
+            WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'ACCESSES', 'USES_CLASS']
             RETURN r.type AS relType, caller.id AS uid, caller.name AS name, caller.filePath AS filePath, labels(caller)[0] AS kind
             LIMIT 30
           `,
@@ -2056,7 +2188,7 @@ export class LocalBackend {
                OR p.declaredType STARTS WITH $genericPrefix
                OR p.declaredType CONTAINS $genericArg
             MATCH (caller)-[r:CodeRelation]->(p)
-            WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'ACCESSES']
+            WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'ACCESSES', 'USES_CLASS']
             RETURN r.type AS relType, caller.id AS uid, caller.name AS name, caller.filePath AS filePath, labels(caller)[0] AS kind
             LIMIT 30
           `,
@@ -2109,7 +2241,7 @@ export class LocalBackend {
       repo.id,
       `
       MATCH (n {id: $symId})-[r:CodeRelation]->(target)
-      WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'HAS_METHOD', 'HAS_PROPERTY', 'METHOD_OVERRIDES', 'OVERRIDES', 'METHOD_IMPLEMENTS', 'ACCESSES']
+      WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'HAS_METHOD', 'HAS_PROPERTY', 'METHOD_OVERRIDES', 'OVERRIDES', 'METHOD_IMPLEMENTS', 'ACCESSES', 'USES_COMPONENT', 'ROUTE_COMPONENT', 'USES_CLASS']
       RETURN r.type AS relType, target.id AS uid, target.name AS name, target.filePath AS filePath, labels(target)[0] AS kind
       LIMIT 30
     `,
@@ -2801,6 +2933,9 @@ export class LocalBackend {
             'EXTENDS',
             'IMPLEMENTS',
             'USES',
+            'USES_COMPONENT',
+            'ROUTE_COMPONENT',
+            'USES_CLASS',
             'METHOD_OVERRIDES',
             'OVERRIDES',
             'METHOD_IMPLEMENTS',
@@ -2814,6 +2949,9 @@ export class LocalBackend {
             'EXTENDS',
             'IMPLEMENTS',
             'USES',
+            'USES_COMPONENT',
+            'ROUTE_COMPONENT',
+            'USES_CLASS',
             'METHOD_OVERRIDES',
             'OVERRIDES',
             'METHOD_IMPLEMENTS',
@@ -3551,6 +3689,9 @@ export class LocalBackend {
             'IMPORTS',
             'EXTENDS',
             'IMPLEMENTS',
+            'USES_COMPONENT',
+            'ROUTE_COMPONENT',
+            'USES_CLASS',
             'METHOD_OVERRIDES',
             'OVERRIDES',
             'METHOD_IMPLEMENTS',
@@ -3563,6 +3704,9 @@ export class LocalBackend {
             'IMPORTS',
             'EXTENDS',
             'IMPLEMENTS',
+            'USES_COMPONENT',
+            'ROUTE_COMPONENT',
+            'USES_CLASS',
             'METHOD_OVERRIDES',
             'OVERRIDES',
             'METHOD_IMPLEMENTS',

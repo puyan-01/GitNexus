@@ -1112,6 +1112,9 @@ const getCopyQuery = (table: NodeTableName, filePath: string): string => {
   if (table === 'Route') {
     return `COPY ${t}(id, name, filePath, responseKeys, errorKeys, middleware) FROM "${filePath}" ${COPY_CSV_OPTS}`;
   }
+  if (table === 'Component') {
+    return `COPY ${t}(id, name, filePath, startLine, endLine, isExported, content, description, componentKind, decorators, isDialog, isPage, routePath) FROM "${filePath}" ${COPY_CSV_OPTS}`;
+  }
   if (table === 'Tool') {
     return `COPY ${t}(id, name, filePath, description) FROM "${filePath}" ${COPY_CSV_OPTS}`;
   }

@@ -103,6 +103,25 @@ CREATE NODE TABLE CodeElement (
   PRIMARY KEY (id)
 )`;
 
+// HarmonyOS ArkUI components (@Component, @ComponentV2, @CustomDialog)
+export const COMPONENT_SCHEMA = `
+CREATE NODE TABLE Component (
+  id STRING,
+  name STRING,
+  filePath STRING,
+  startLine INT64,
+  endLine INT64,
+  isExported BOOLEAN,
+  content STRING,
+  description STRING,
+  componentKind STRING,
+  decorators STRING[],
+  isDialog BOOLEAN,
+  isPage BOOLEAN,
+  routePath STRING,
+  PRIMARY KEY (id)
+)`;
+
 // ============================================================================
 // COMMUNITY NODE TABLE (for Leiden algorithm clusters)
 // ============================================================================
@@ -235,6 +254,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM File TO Interface,
   FROM File TO Method,
   FROM File TO CodeElement,
+  FROM File TO Component,
   FROM File TO \`Struct\`,
   FROM File TO \`Enum\`,
   FROM File TO \`Macro\`,
@@ -276,6 +296,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM Function TO \`Union\`,
   FROM Function TO \`Property\`,
   FROM Function TO CodeElement,
+  FROM Function TO Component,
   FROM Class TO Method,
   FROM Class TO Function,
   FROM Class TO Class,
@@ -294,6 +315,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM Class TO \`Namespace\`,
   FROM Class TO \`Typedef\`,
   FROM Class TO \`Property\`,
+  FROM Class TO Component,
   FROM Method TO Function,
   FROM Method TO Method,
   FROM Method TO Class,
@@ -310,6 +332,15 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM Method TO \`Constructor\`,
   FROM Method TO \`Property\`,
   FROM Method TO CodeElement,
+  FROM Method TO Component,
+  FROM Component TO Component,
+  FROM Component TO Class,
+  FROM Component TO Interface,
+  FROM Component TO Function,
+  FROM Component TO Method,
+  FROM Component TO \`Property\`,
+  FROM Component TO Community,
+  FROM Component TO Process,
   FROM \`Template\` TO \`Template\`,
   FROM \`Template\` TO Function,
   FROM \`Template\` TO Method,
@@ -430,6 +461,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM \`Template\` TO Process,
   FROM CodeElement TO Process,
   FROM Route TO Process,
+  FROM Route TO Component,
   FROM Tool TO Process,
   type STRING,
   confidence DOUBLE,
@@ -493,6 +525,7 @@ export const NODE_SCHEMA_QUERIES = [
   INTERFACE_SCHEMA,
   METHOD_SCHEMA,
   CODE_ELEMENT_SCHEMA,
+  COMPONENT_SCHEMA,
   COMMUNITY_SCHEMA,
   PROCESS_SCHEMA,
   // Multi-language support

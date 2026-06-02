@@ -25,6 +25,7 @@ export type NodeLabel =
   | 'CodeElement'
   | 'Community'
   | 'Process'
+  | 'Component'
   // Multi-language node types
   | 'Struct'
   | 'Macro'
@@ -115,7 +116,10 @@ export type RelationshipType =
   | 'HANDLES_TOOL'
   | 'ENTRY_POINT_OF'
   | 'WRAPS'
-  | 'QUERIES';
+  | 'QUERIES'
+  | 'USES_COMPONENT'
+  | 'ROUTE_COMPONENT'
+  | 'USES_CLASS';
 
 export interface GraphNode {
   id: string;
