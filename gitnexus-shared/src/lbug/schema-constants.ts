@@ -20,6 +20,7 @@ export const NODE_TABLES = [
   'Process',
   'Section',
   'Component',
+  'StorageKey',
   'Struct',
   'Enum',
   'Macro',
@@ -71,6 +72,9 @@ export const REL_TYPES = [
   'USES_COMPONENT',
   'ROUTE_COMPONENT',
   'USES_CLASS',
+  'READS_STORAGE',
+  'WRITES_STORAGE',
+  'BINDS_STORAGE',
 ] as const;
 
 export type RelType = (typeof REL_TYPES)[number];

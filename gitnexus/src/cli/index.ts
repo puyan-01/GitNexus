@@ -179,6 +179,24 @@ program
   )
   .action(createLbugLazyAction(() => import('./wiki.js'), 'wikiCommand'));
 
+const exportCommand = program.command('export').description('Export indexed graph data');
+
+exportCommand
+  .command('obsidian')
+  .description('Export selected graph nodes and relationships as Obsidian Markdown notes')
+  .requiredOption('-r, --repo <name>', 'Target repository')
+  .option('-o, --out <dir>', 'Output folder inside an Obsidian vault')
+  .option(
+    '--types <types>',
+    'Comma-separated node types to export (default: Component,Class,Route,StorageKey)',
+  )
+  .option(
+    '--relations <types>',
+    'Comma-separated relation types to link (default: HarmonyOS-oriented relations)',
+  )
+  .option('--limit <n>', 'Limit exported nodes for testing')
+  .action(createLbugLazyAction(() => import('./obsidian-export.js'), 'obsidianExportCommand'));
+
 program
   .command('augment <pattern>')
   .description('Augment a search pattern with knowledge graph context (used by hooks)')

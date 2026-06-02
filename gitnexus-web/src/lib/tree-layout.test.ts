@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateTreeLayout } from './tree-layout';
+import { calculateCirclesLayout } from './circles-layout';
 import type { KnowledgeGraph } from '../core/graph/types';
 import type { GraphNode } from 'gitnexus-shared';
 
@@ -213,5 +214,32 @@ describe('calculateTreeLayout', () => {
 
     expect(Math.max(...functionXs) - Math.min(...functionXs)).toBeGreaterThan(280);
     expect(positions.get('file')!.y).toBeGreaterThan(positions.get('fn0')!.y);
+  });
+
+  it('should tolerate indexed symbols without a name', () => {
+    const namelessNode = {
+      id: 'Method:features/Explore/src/main/ets/components/LyricComponent.ets:',
+      label: 'Method',
+      properties: {
+        filePath: 'features/Explore/src/main/ets/components/LyricComponent.ets',
+        startLine: 3139,
+        endLine: 3167,
+      },
+    } as GraphNode;
+
+    const graph: KnowledgeGraph = {
+      nodes: [makeNode('file', 'File', 'LyricComponent.ets'), namelessNode],
+      relationships: [{ id: 'r1', type: 'DEFINES', sourceId: 'file', targetId: namelessNode.id }],
+    };
+
+    const treePositions = calculateTreeLayout(graph);
+    const circlesPositions = calculateCirclesLayout(graph);
+    const treePosition = treePositions.get(namelessNode.id)!;
+    const circlesPosition = circlesPositions.get(namelessNode.id)!;
+
+    expect(Number.isFinite(treePosition.x)).toBe(true);
+    expect(Number.isFinite(treePosition.y)).toBe(true);
+    expect(Number.isFinite(circlesPosition.x)).toBe(true);
+    expect(Number.isFinite(circlesPosition.y)).toBe(true);
   });
 });

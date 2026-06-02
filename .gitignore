@@ -110,3 +110,6 @@ local_docs/
 .agents/
 .context/
 gitnexus/web/
+
+# Generated Obsidian Markdown exports
+obsidian-exports/

@@ -21,6 +21,7 @@ export const NODE_COLORS: Record<NodeLabel, string> = {
   Process: '#f43f5e', // Rose - execution flow indicator
   Section: '#60a5fa', // Blue light - structural section
   Component: '#0ea5e9', // Sky - UI component
+  StorageKey: '#22c55e', // Green - app storage state
   Struct: '#f59e0b', // Amber - like Class
   Trait: '#ec4899', // Pink - like Interface
   Impl: '#14b8a6', // Teal - like Method
@@ -63,6 +64,7 @@ export const NODE_SIZES: Record<NodeLabel, number> = {
   Process: 0, // Hidden by default - metadata node
   Section: 8, // Structural section - similar to Folder
   Component: 7, // UI component
+  StorageKey: 4, // App storage key
   Struct: 8, // Like Class
   Trait: 7, // Like Interface
   Impl: 3, // Like Method
@@ -103,25 +105,9 @@ export const getCommunityColor = (communityIndex: number): string => {
   return COMMUNITY_COLORS[communityIndex % COMMUNITY_COLORS.length];
 };
 
-// Labels to show by default (hide imports by default as they clutter).
-// Property/Const are the Kotlin/Java equivalents of Variable — include them so
-// Kotlin repos don't appear to have no leaf nodes.
-export const DEFAULT_VISIBLE_LABELS: NodeLabel[] = [
-  'Project',
-  'Package',
-  'Module',
-  'Folder',
-  'File',
-  'Class',
-  'Component',
-  'Function',
-  'Method',
-  'Property', // Kotlin/Java fields (HAS_PROPERTY + DEFINES File→Property)
-  'Const', // Top-level constants
-  'Interface',
-  'Enum',
-  'Type',
-];
+// Labels to show by default. Keep the initial graph small; users can enable
+// additional node types from the filter panel.
+export const DEFAULT_VISIBLE_LABELS: NodeLabel[] = ['Class'];
 
 // All filterable labels (in display order)
 export const FILTERABLE_LABELS: NodeLabel[] = [
@@ -129,6 +115,7 @@ export const FILTERABLE_LABELS: NodeLabel[] = [
   'File',
   'Class',
   'Component',
+  'StorageKey',
   'Interface',
   'Enum',
   'Type',
@@ -151,7 +138,10 @@ export type EdgeType =
   | 'IMPLEMENTS'
   | 'USES_COMPONENT'
   | 'ROUTE_COMPONENT'
-  | 'USES_CLASS';
+  | 'USES_CLASS'
+  | 'READS_STORAGE'
+  | 'WRITES_STORAGE'
+  | 'BINDS_STORAGE';
 
 export const ALL_EDGE_TYPES: EdgeType[] = [
   'CONTAINS',
@@ -163,6 +153,9 @@ export const ALL_EDGE_TYPES: EdgeType[] = [
   'USES_COMPONENT',
   'ROUTE_COMPONENT',
   'USES_CLASS',
+  'READS_STORAGE',
+  'WRITES_STORAGE',
+  'BINDS_STORAGE',
 ];
 
 // Default visible edges (CALLS hidden by default to reduce clutter)
@@ -176,6 +169,9 @@ export const DEFAULT_VISIBLE_EDGES: EdgeType[] = [
   'USES_COMPONENT',
   'ROUTE_COMPONENT',
   'USES_CLASS',
+  'READS_STORAGE',
+  'WRITES_STORAGE',
+  'BINDS_STORAGE',
 ];
 
 // Edge display info for UI
@@ -189,4 +185,7 @@ export const EDGE_INFO: Record<EdgeType, { color: string; label: string }> = {
   USES_COMPONENT: { color: '#0284c7', label: 'Uses component' },
   ROUTE_COMPONENT: { color: '#e11d48', label: 'Route component' },
   USES_CLASS: { color: '#ca8a04', label: 'Uses class' },
+  READS_STORAGE: { color: '#16a34a', label: 'Reads storage' },
+  WRITES_STORAGE: { color: '#dc2626', label: 'Writes storage' },
+  BINDS_STORAGE: { color: '#0891b2', label: 'Binds storage' },
 };

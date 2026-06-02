@@ -50,6 +50,9 @@ const HARMONY_CLASS_REF_RE =
   /\b(?:new\s+|:\s*|as\s+|extends\s+|implements\s+)([A-Z][A-Za-z_$][\w$]*)\b/g;
 const HARMONY_IMPORT_RE =
   /import\s+(?:type\s+)?(?:(\{[^}]*\})|([A-Za-z_$][\w$]*)(?:\s*,\s*(\{[^}]*\}))?)\s+from\s+['"]([^'"]+)['"]/g;
+const HARMONY_APP_STORAGE_CALL_RE =
+  /\bAppStorage\.(get|set|setOrCreate|link|prop|setAndLink|setAndProp|delete|has)\s*(?:<[^>]*>)?\s*\(\s*([^,\)\n]+)/g;
+const HARMONY_STORAGE_DECORATOR_RE = /@(StorageLink|StorageProp)\s*\(\s*([^)]+)\)/g;
 
 interface HarmonyImportRef {
   importedName: string | null;
@@ -64,6 +67,7 @@ interface HarmonyDeclaration {
   isEntry: boolean;
   isRouteComponent: boolean;
   isComponent: boolean;
+  bodyStartLine: number;
 }
 
 interface HarmonyComponentResolution {
@@ -80,6 +84,14 @@ interface HarmonyClassRef {
 interface HarmonyClassResolution {
   classNode: HarmonyClassRef;
   reason: string;
+}
+
+interface HarmonyStorageUsage {
+  keyName: string;
+  keyExpression: string;
+  relationType: 'READS_STORAGE' | 'WRITES_STORAGE' | 'BINDS_STORAGE';
+  reason: string;
+  lineNumber: number;
 }
 
 function extractHarmonyRouterNameMap(contents: ReadonlyMap<string, string>): Map<string, string> {
@@ -132,6 +144,10 @@ function extractDecoratorNames(block: string): string[] {
     names.push(match[1]);
   }
   return names;
+}
+
+function lineNumberAt(content: string, index: number): number {
+  return content.slice(0, index).split('\n').length - 1;
 }
 
 function findMatchingBrace(content: string, openIndex: number): number {
@@ -241,11 +257,65 @@ function collectHarmonyDeclarations(filePath: string, content: string): HarmonyD
       isEntry,
       isRouteComponent: isEntry || decorators.includes('HMRouter'),
       isComponent: componentDecorators.length > 0,
+      bodyStartLine: openIndex >= 0 ? lineNumberAt(content, openIndex + 1) + 1 : lineNumberAt(content, match.index) + 1,
       id: generateId('Component', `${filePath}:${name}`),
       body,
     });
   }
   return declarations;
+}
+
+function normalizeHarmonyStorageKeyExpression(rawValue: string): string | null {
+  const value = rawValue.trim().replace(/;$/, '').trim();
+  const literal = value.match(/^['"`]([^'"`]+)['"`]$/);
+  if (literal) return literal[1];
+  const member = value.match(/^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)$/);
+  if (member) return member[1];
+  return null;
+}
+
+function storageRelationForAppStorageMethod(
+  method: string,
+): 'READS_STORAGE' | 'WRITES_STORAGE' | 'BINDS_STORAGE' {
+  if (method === 'get' || method === 'has') return 'READS_STORAGE';
+  if (method === 'link' || method === 'prop' || method === 'setAndLink' || method === 'setAndProp') {
+    return 'BINDS_STORAGE';
+  }
+  return 'WRITES_STORAGE';
+}
+
+function extractHarmonyStorageUsages(decl: HarmonyDeclaration): HarmonyStorageUsage[] {
+  const usages: HarmonyStorageUsage[] = [];
+
+  HARMONY_APP_STORAGE_CALL_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = HARMONY_APP_STORAGE_CALL_RE.exec(decl.body)) !== null) {
+    const keyName = normalizeHarmonyStorageKeyExpression(match[2]);
+    if (!keyName) continue;
+    const method = match[1];
+    usages.push({
+      keyName,
+      keyExpression: match[2].trim(),
+      relationType: storageRelationForAppStorageMethod(method),
+      reason: `harmony-appstorage-${method}`,
+      lineNumber: decl.bodyStartLine + lineNumberAt(decl.body, match.index),
+    });
+  }
+
+  HARMONY_STORAGE_DECORATOR_RE.lastIndex = 0;
+  while ((match = HARMONY_STORAGE_DECORATOR_RE.exec(decl.body)) !== null) {
+    const keyName = normalizeHarmonyStorageKeyExpression(match[2]);
+    if (!keyName) continue;
+    usages.push({
+      keyName,
+      keyExpression: match[2].trim(),
+      relationType: 'BINDS_STORAGE',
+      reason: `harmony-${match[1].toLowerCase()}`,
+      lineNumber: decl.bodyStartLine + lineNumberAt(decl.body, match.index),
+    });
+  }
+
+  return usages;
 }
 
 function extractHarmonyComponentCallNames(body: string): Set<string> {
@@ -398,6 +468,26 @@ async function linkHarmonyComponentUsage(
   }
 
   const relationKeys = new Set<string>();
+  const addStorageKeyNode = (usage: HarmonyStorageUsage, filePath: string): string => {
+    const storageId = generateId('StorageKey', `AppStorage:${usage.keyName}`);
+    if (!ctx.graph.getNode(storageId)) {
+      ctx.graph.addNode({
+        id: storageId,
+        label: 'StorageKey',
+        properties: {
+          name: usage.keyName,
+          filePath,
+          startLine: usage.lineNumber,
+          endLine: usage.lineNumber,
+          language: 'TypeScript',
+          storageKind: 'AppStorage',
+          keyExpression: usage.keyExpression,
+        },
+      });
+    }
+    return storageId;
+  };
+
   const addRouteComponent = (routeURL: string, component: HarmonyDeclaration): void => {
     const routeId = generateId('Route', routeURL);
     const key = `ROUTE_COMPONENT:${routeId}->${component.id}`;
@@ -448,6 +538,25 @@ async function linkHarmonyComponentUsage(
     });
   };
 
+  const addStorageUsage = (
+    sourceId: string,
+    sourceFile: string,
+    usage: HarmonyStorageUsage,
+  ): void => {
+    const storageId = addStorageKeyNode(usage, sourceFile);
+    const key = `${usage.relationType}:${sourceId}->${storageId}`;
+    if (relationKeys.has(key)) return;
+    relationKeys.add(key);
+    ctx.graph.addRelationship({
+      id: generateId(usage.relationType, key),
+      sourceId,
+      targetId: storageId,
+      type: usage.relationType,
+      confidence: 1.0,
+      reason: usage.reason,
+    });
+  };
+
   for (const decl of declarations) {
     if (decl.isRouteComponent && routesByFile.has(decl.filePath)) {
       for (const routeURL of routesByFile.get(decl.filePath) || []) {
@@ -490,10 +599,19 @@ async function linkHarmonyComponentUsage(
       );
       if (resolved) addClassUsage(decl.id, resolved.classNode, resolved.reason);
     }
+    const storageUsages = extractHarmonyStorageUsages(decl);
+    for (const usage of storageUsages) {
+      addStorageUsage(decl.id, decl.filePath, usage);
+      if (decl.isRouteComponent) {
+        for (const routeURL of routesByFile.get(decl.filePath) || []) {
+          addStorageUsage(generateId('Route', routeURL), decl.filePath, usage);
+        }
+      }
+    }
   }
 
   if (isDev && relationKeys.size > 0) {
-    logger.info(`Linked ${relationKeys.size} Harmony route/component/class edges`);
+    logger.info(`Linked ${relationKeys.size} Harmony route/component/class/storage edges`);
   }
 }
 

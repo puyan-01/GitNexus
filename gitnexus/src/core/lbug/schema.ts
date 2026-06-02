@@ -122,6 +122,19 @@ CREATE NODE TABLE Component (
   PRIMARY KEY (id)
 )`;
 
+// HarmonyOS AppStorage keys used by pages/components/services.
+export const STORAGE_KEY_SCHEMA = `
+CREATE NODE TABLE StorageKey (
+  id STRING,
+  name STRING,
+  filePath STRING,
+  startLine INT64,
+  endLine INT64,
+  storageKind STRING,
+  keyExpression STRING,
+  PRIMARY KEY (id)
+)`;
+
 // ============================================================================
 // COMMUNITY NODE TABLE (for Leiden algorithm clusters)
 // ============================================================================
@@ -255,6 +268,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM File TO Method,
   FROM File TO CodeElement,
   FROM File TO Component,
+  FROM File TO StorageKey,
   FROM File TO \`Struct\`,
   FROM File TO \`Enum\`,
   FROM File TO \`Macro\`,
@@ -297,6 +311,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM Function TO \`Property\`,
   FROM Function TO CodeElement,
   FROM Function TO Component,
+  FROM Function TO StorageKey,
   FROM Class TO Method,
   FROM Class TO Function,
   FROM Class TO Class,
@@ -316,6 +331,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM Class TO \`Typedef\`,
   FROM Class TO \`Property\`,
   FROM Class TO Component,
+  FROM Class TO StorageKey,
   FROM Method TO Function,
   FROM Method TO Method,
   FROM Method TO Class,
@@ -333,12 +349,14 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM Method TO \`Property\`,
   FROM Method TO CodeElement,
   FROM Method TO Component,
+  FROM Method TO StorageKey,
   FROM Component TO Component,
   FROM Component TO Class,
   FROM Component TO Interface,
   FROM Component TO Function,
   FROM Component TO Method,
   FROM Component TO \`Property\`,
+  FROM Component TO StorageKey,
   FROM Component TO Community,
   FROM Component TO Process,
   FROM \`Template\` TO \`Template\`,
@@ -462,6 +480,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
   FROM CodeElement TO Process,
   FROM Route TO Process,
   FROM Route TO Component,
+  FROM Route TO StorageKey,
   FROM Tool TO Process,
   type STRING,
   confidence DOUBLE,
@@ -526,6 +545,7 @@ export const NODE_SCHEMA_QUERIES = [
   METHOD_SCHEMA,
   CODE_ELEMENT_SCHEMA,
   COMPONENT_SCHEMA,
+  STORAGE_KEY_SCHEMA,
   COMMUNITY_SCHEMA,
   PROCESS_SCHEMA,
   // Multi-language support

@@ -26,6 +26,7 @@ export type NodeLabel =
   | 'Community'
   | 'Process'
   | 'Component'
+  | 'StorageKey'
   // Multi-language node types
   | 'Struct'
   | 'Macro'
@@ -119,7 +120,10 @@ export type RelationshipType =
   | 'QUERIES'
   | 'USES_COMPONENT'
   | 'ROUTE_COMPONENT'
-  | 'USES_CLASS';
+  | 'USES_CLASS'
+  | 'READS_STORAGE'
+  | 'WRITES_STORAGE'
+  | 'BINDS_STORAGE';
 
 export interface GraphNode {
   id: string;

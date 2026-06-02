@@ -17,7 +17,7 @@ import {
 
 describe('VALID_RELATION_TYPES', () => {
   it('contains all expected relation types', () => {
-    expect(VALID_RELATION_TYPES.size).toBe(15);
+    expect(VALID_RELATION_TYPES.size).toBe(21);
     for (const t of [
       'CALLS',
       'IMPORTS',
@@ -34,6 +34,12 @@ describe('VALID_RELATION_TYPES', () => {
       'HANDLES_TOOL',
       'ENTRY_POINT_OF',
       'WRAPS',
+      'USES_COMPONENT',
+      'ROUTE_COMPONENT',
+      'USES_CLASS',
+      'READS_STORAGE',
+      'WRITES_STORAGE',
+      'BINDS_STORAGE',
     ]) {
       expect(VALID_RELATION_TYPES.has(t)).toBe(true);
     }
@@ -59,6 +65,8 @@ describe('VALID_NODE_LABELS', () => {
       'Interface',
       'Method',
       'CodeElement',
+      'Component',
+      'StorageKey',
     ]) {
       expect(VALID_NODE_LABELS.has(label)).toBe(true);
     }

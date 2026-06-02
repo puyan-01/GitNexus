@@ -15,6 +15,7 @@ import {
   METHOD_SCHEMA,
   PROPERTY_SCHEMA,
   CODE_ELEMENT_SCHEMA,
+  STORAGE_KEY_SCHEMA,
   COMMUNITY_SCHEMA,
   PROCESS_SCHEMA,
   RELATION_SCHEMA,
@@ -69,8 +70,8 @@ describe('LadybugDB Schema', () => {
     });
 
     it('has expected total count', () => {
-      // 9 core + 19 multi-language + Route + Tool = 31
-      expect(NODE_TABLES).toHaveLength(31);
+      // 9 core + Component + StorageKey + 19 multi-language + Route + Tool = 33
+      expect(NODE_TABLES).toHaveLength(33);
     });
   });
 
@@ -101,6 +102,7 @@ describe('LadybugDB Schema', () => {
       ['INTERFACE_SCHEMA', INTERFACE_SCHEMA, 'Interface'],
       ['METHOD_SCHEMA', METHOD_SCHEMA, 'Method'],
       ['CODE_ELEMENT_SCHEMA', CODE_ELEMENT_SCHEMA, 'CodeElement'],
+      ['STORAGE_KEY_SCHEMA', STORAGE_KEY_SCHEMA, 'StorageKey'],
       ['COMMUNITY_SCHEMA', COMMUNITY_SCHEMA, 'Community'],
       ['PROCESS_SCHEMA', PROCESS_SCHEMA, 'Process'],
     ])('%s contains CREATE NODE TABLE for %s', (_, schema, tableName) => {
@@ -208,7 +210,7 @@ describe('LadybugDB Schema', () => {
 
   describe('schema query ordering', () => {
     it('NODE_SCHEMA_QUERIES has correct count', () => {
-      expect(NODE_SCHEMA_QUERIES).toHaveLength(31);
+      expect(NODE_SCHEMA_QUERIES).toHaveLength(33);
     });
 
     it('REL_SCHEMA_QUERIES has one relation table', () => {
@@ -216,8 +218,8 @@ describe('LadybugDB Schema', () => {
     });
 
     it('SCHEMA_QUERIES includes all node + rel + embedding schemas', () => {
-      // 31 node + 1 rel + 1 embedding = 33
-      expect(SCHEMA_QUERIES).toHaveLength(33);
+      // 33 node + 1 rel + 1 embedding = 35
+      expect(SCHEMA_QUERIES).toHaveLength(35);
     });
 
     it('node schemas come before relation schemas in SCHEMA_QUERIES', () => {

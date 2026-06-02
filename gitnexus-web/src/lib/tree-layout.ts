@@ -31,6 +31,7 @@ const TYPE_TO_LAYER: Record<string, number> = {
   // Layer 2: Type definitions
   Class: 2,
   Component: 2,
+  StorageKey: 3,
   Interface: 2,
   Enum: 2,
   Type: 2,
@@ -104,6 +105,13 @@ function deterministicHash(str: string): number {
 
 function getNodeLayer(node: GraphNode): number {
   return TYPE_TO_LAYER[node.label] ?? DEFAULT_LAYER;
+}
+
+function getNodeSortName(node: GraphNode): string {
+  const name = node.properties?.name;
+  if (typeof name === 'string' && name.length > 0) return name;
+
+  return node.id.split(':').filter(Boolean).pop() ?? node.id;
 }
 
 function buildHierarchyMaps(graph: KnowledgeGraph) {
@@ -290,7 +298,7 @@ function initProportionalPositions(
 
   // --- Layer 0: sorted alphabetically, evenly spaced ---
   const layer0Nodes = [...nodesByLayer[0]].sort((a, b) =>
-    a.properties.name.localeCompare(b.properties.name),
+    getNodeSortName(a).localeCompare(getNodeSortName(b)),
   );
   if (layer0Nodes.length > 0) {
     const spacing = availableWidth / layer0Nodes.length;
@@ -347,9 +355,9 @@ function initProportionalPositions(
 
     // Sort within each parent's group and orphans alphabetically.
     for (const children of childrenOfParent.values()) {
-      children.sort((a, b) => a.properties.name.localeCompare(b.properties.name));
+      children.sort((a, b) => getNodeSortName(a).localeCompare(getNodeSortName(b)));
     }
-    orphans.sort((a, b) => a.properties.name.localeCompare(b.properties.name));
+    orphans.sort((a, b) => getNodeSortName(a).localeCompare(getNodeSortName(b)));
 
     // Sort active parents left-to-right by their placed X position.
     const activeParents = [...childrenOfParent.keys()].sort(

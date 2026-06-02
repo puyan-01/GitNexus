@@ -8,6 +8,7 @@ import {
   finalizeLbugSidecarsAfterClose,
   inspectLbugSidecars,
   isPermissionRenameError,
+  isMissingShadowSidecarError,
   isReadOnlyShadowReplayError,
   listQuarantinedMissingShadowWals,
   preflightLbugSidecars,
@@ -112,6 +113,14 @@ describe('LadybugDB sidecar recovery', () => {
 
     expect(state.kind).toBe('tiny-orphan-wal');
     await expect(fs.stat(`${dbPath}.wal`)).resolves.toBeDefined();
+  });
+
+  it('detects Windows missing-shadow native error text', () => {
+    expect(
+      isMissingShadowSidecarError(
+        'IO exception: Cannot open file. path: C:\\project\\repo\\.gitnexus\\lbug.shadow - Error 2: The system cannot find the file specified.',
+      ),
+    ).toBe(true);
   });
 
   describe('renameFailureMessage classifier (PR #1747 review)', () => {

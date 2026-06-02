@@ -52,6 +52,7 @@ const TYPE_TO_RING: Record<string, number> = {
   // Ring 2 – type definitions
   Class: 2,
   Component: 2,
+  StorageKey: 3,
   Interface: 2,
   Enum: 2,
   Type: 2,
@@ -95,6 +96,13 @@ export const CIRCLES_HIERARCHY_RELATIONS = new Set([
 
 function getNodeRing(node: GraphNode): number {
   return TYPE_TO_RING[node.label] ?? DEFAULT_RING;
+}
+
+function getNodeSortName(node: GraphNode): string {
+  const name = node.properties?.name;
+  if (typeof name === 'string' && name.length > 0) return name;
+
+  return node.id.split(':').filter(Boolean).pop() ?? node.id;
 }
 
 function calculateNodeSize(ring: number, nodeType: NodeLabel): number {
@@ -164,7 +172,7 @@ function initParentCentredAngles(
 
   // --- Ring 0: sorted alphabetically, evenly spaced around full circle ---
   const ring0Nodes = [...nodesByRing[0]].sort((a, b) =>
-    a.properties.name.localeCompare(b.properties.name),
+    getNodeSortName(a).localeCompare(getNodeSortName(b)),
   );
 
   if (ring0Nodes.length > 0) {
@@ -223,9 +231,9 @@ function initParentCentredAngles(
     }
 
     for (const children of childrenOfParent.values()) {
-      children.sort((a, b) => a.properties.name.localeCompare(b.properties.name));
+      children.sort((a, b) => getNodeSortName(a).localeCompare(getNodeSortName(b)));
     }
-    orphans.sort((a, b) => a.properties.name.localeCompare(b.properties.name));
+    orphans.sort((a, b) => getNodeSortName(a).localeCompare(getNodeSortName(b)));
 
     const totalParented = ringNodes.length - orphans.length;
     const parentedFraction = totalParented > 0 ? totalParented / ringNodes.length : 0;

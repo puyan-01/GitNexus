@@ -1,5 +1,22 @@
 import Parser from 'tree-sitter';
-import Kotlin from 'tree-sitter-kotlin';
+import { createRequire } from 'node:module';
+
+type TreeSitterLanguage = Parameters<typeof Parser.prototype.setLanguage>[0];
+
+const require = createRequire(import.meta.url);
+let Kotlin: TreeSitterLanguage | null = null;
+try {
+  Kotlin = require('tree-sitter-kotlin') as TreeSitterLanguage;
+} catch {}
+
+function getKotlinLanguage(): TreeSitterLanguage {
+  if (!Kotlin) {
+    throw new Error(
+      'Kotlin parsing disabled: tree-sitter-kotlin native binding is unavailable in this environment.',
+    );
+  }
+  return Kotlin;
+}
 
 const KOTLIN_SCOPE_QUERY = `
 ;; Scopes
@@ -149,14 +166,14 @@ let query: Parser.Query | null = null;
 export function getKotlinParser(): Parser {
   if (parser === null) {
     parser = new Parser();
-    parser.setLanguage(Kotlin as Parameters<Parser['setLanguage']>[0]);
+    parser.setLanguage(getKotlinLanguage());
   }
   return parser;
 }
 
 export function getKotlinScopeQuery(): Parser.Query {
   if (query === null) {
-    query = new Parser.Query(Kotlin as Parameters<Parser['setLanguage']>[0], KOTLIN_SCOPE_QUERY);
+    query = new Parser.Query(getKotlinLanguage(), KOTLIN_SCOPE_QUERY);
   }
   return query;
 }

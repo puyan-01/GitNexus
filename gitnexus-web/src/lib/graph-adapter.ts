@@ -84,6 +84,13 @@ const getNodeMass = (nodeType: NodeLabel, nodeCount: number): number => {
   }
 };
 
+const getNodeDisplayLabel = (node: { id: string; properties?: { name?: unknown } }): string => {
+  const name = node.properties?.name;
+  if (typeof name === 'string' && name.length > 0) return name;
+
+  return node.id.split(':').filter(Boolean).pop() ?? node.id;
+};
+
 /**
  * Converts the KnowledgeGraph to a graphology Graph for Sigma.js
  * Folders are positioned in a wide spread, children positioned NEAR their parents
@@ -187,7 +194,7 @@ export const knowledgeGraphToGraphology = (
       y,
       size: scaledSize,
       color: NODE_COLORS[node.label] || '#9ca3af',
-      label: node.properties.name,
+      label: getNodeDisplayLabel(node),
       nodeType: node.label,
       filePath: node.properties.filePath,
       startLine: node.properties.startLine,
@@ -250,7 +257,7 @@ export const knowledgeGraphToGraphology = (
       y,
       size: scaledSize,
       color: nodeColor,
-      label: node.properties.name,
+      label: getNodeDisplayLabel(node),
       nodeType: node.label,
       filePath: node.properties.filePath,
       startLine: node.properties.startLine,
@@ -366,7 +373,7 @@ export const knowledgeGraphToTreeGraphology = (
       y: pos.y,
       size: finalSize,
       color: NODE_COLORS[node.label] || '#9ca3af',
-      label: node.properties.name,
+      label: getNodeDisplayLabel(node),
       nodeType: node.label,
       filePath: node.properties.filePath,
       startLine: node.properties.startLine,
@@ -447,7 +454,7 @@ export const knowledgeGraphToCirclesGraphology = (
       y: pos.y,
       size: finalSize,
       color: NODE_COLORS[node.label] || '#9ca3af',
-      label: node.properties.name,
+      label: getNodeDisplayLabel(node),
       nodeType: node.label,
       filePath: node.properties.filePath,
       startLine: node.properties.startLine,

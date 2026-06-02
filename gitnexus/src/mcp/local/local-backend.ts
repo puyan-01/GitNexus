@@ -212,6 +212,7 @@ export const VALID_NODE_LABELS = new Set([
   'Community',
   'Process',
   'Component',
+  'StorageKey',
   'Struct',
   'Enum',
   'Macro',
@@ -254,6 +255,9 @@ export const VALID_RELATION_TYPES = new Set([
   'USES_COMPONENT',
   'ROUTE_COMPONENT',
   'USES_CLASS',
+  'READS_STORAGE',
+  'WRITES_STORAGE',
+  'BINDS_STORAGE',
 ]);
 
 /**
@@ -290,6 +294,9 @@ export const IMPACT_RELATION_CONFIDENCE: Readonly<Record<string, number>> = {
   USES_COMPONENT: 0.9,
   ROUTE_COMPONENT: 0.95,
   USES_CLASS: 0.9,
+  READS_STORAGE: 0.9,
+  WRITES_STORAGE: 0.9,
+  BINDS_STORAGE: 0.9,
 };
 
 /**
@@ -2113,7 +2120,7 @@ export class LocalBackend {
       repo.id,
       `
       MATCH (caller)-[r:CodeRelation]->(n {id: $symId})
-      WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'HAS_METHOD', 'HAS_PROPERTY', 'METHOD_OVERRIDES', 'OVERRIDES', 'METHOD_IMPLEMENTS', 'ACCESSES', 'USES_COMPONENT', 'ROUTE_COMPONENT', 'USES_CLASS']
+      WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'HAS_METHOD', 'HAS_PROPERTY', 'METHOD_OVERRIDES', 'OVERRIDES', 'METHOD_IMPLEMENTS', 'ACCESSES', 'USES_COMPONENT', 'ROUTE_COMPONENT', 'USES_CLASS', 'READS_STORAGE', 'WRITES_STORAGE', 'BINDS_STORAGE']
       RETURN r.type AS relType, caller.id AS uid, caller.name AS name, caller.filePath AS filePath, labels(caller)[0] AS kind
       LIMIT 30
     `,
@@ -2162,7 +2169,7 @@ export class LocalBackend {
             MATCH (n)-[hm:CodeRelation]->(ctor:Constructor)
             WHERE n.id = $symId AND hm.type = 'HAS_METHOD'
             MATCH (caller)-[r:CodeRelation]->(ctor)
-            WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'ACCESSES', 'USES_CLASS']
+            WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'ACCESSES', 'USES_CLASS', 'READS_STORAGE', 'WRITES_STORAGE', 'BINDS_STORAGE']
             RETURN r.type AS relType, caller.id AS uid, caller.name AS name, caller.filePath AS filePath, labels(caller)[0] AS kind
             LIMIT 30
           `,
@@ -2188,7 +2195,7 @@ export class LocalBackend {
                OR p.declaredType STARTS WITH $genericPrefix
                OR p.declaredType CONTAINS $genericArg
             MATCH (caller)-[r:CodeRelation]->(p)
-            WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'ACCESSES', 'USES_CLASS']
+            WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'ACCESSES', 'USES_CLASS', 'READS_STORAGE', 'WRITES_STORAGE', 'BINDS_STORAGE']
             RETURN r.type AS relType, caller.id AS uid, caller.name AS name, caller.filePath AS filePath, labels(caller)[0] AS kind
             LIMIT 30
           `,
@@ -2241,7 +2248,7 @@ export class LocalBackend {
       repo.id,
       `
       MATCH (n {id: $symId})-[r:CodeRelation]->(target)
-      WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'HAS_METHOD', 'HAS_PROPERTY', 'METHOD_OVERRIDES', 'OVERRIDES', 'METHOD_IMPLEMENTS', 'ACCESSES', 'USES_COMPONENT', 'ROUTE_COMPONENT', 'USES_CLASS']
+      WHERE r.type IN ['CALLS', 'IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'USES', 'HAS_METHOD', 'HAS_PROPERTY', 'METHOD_OVERRIDES', 'OVERRIDES', 'METHOD_IMPLEMENTS', 'ACCESSES', 'USES_COMPONENT', 'ROUTE_COMPONENT', 'USES_CLASS', 'READS_STORAGE', 'WRITES_STORAGE', 'BINDS_STORAGE']
       RETURN r.type AS relType, target.id AS uid, target.name AS name, target.filePath AS filePath, labels(target)[0] AS kind
       LIMIT 30
     `,
@@ -2936,6 +2943,9 @@ export class LocalBackend {
             'USES_COMPONENT',
             'ROUTE_COMPONENT',
             'USES_CLASS',
+            'READS_STORAGE',
+            'WRITES_STORAGE',
+            'BINDS_STORAGE',
             'METHOD_OVERRIDES',
             'OVERRIDES',
             'METHOD_IMPLEMENTS',
@@ -2952,6 +2962,9 @@ export class LocalBackend {
             'USES_COMPONENT',
             'ROUTE_COMPONENT',
             'USES_CLASS',
+            'READS_STORAGE',
+            'WRITES_STORAGE',
+            'BINDS_STORAGE',
             'METHOD_OVERRIDES',
             'OVERRIDES',
             'METHOD_IMPLEMENTS',
@@ -3692,6 +3705,9 @@ export class LocalBackend {
             'USES_COMPONENT',
             'ROUTE_COMPONENT',
             'USES_CLASS',
+            'READS_STORAGE',
+            'WRITES_STORAGE',
+            'BINDS_STORAGE',
             'METHOD_OVERRIDES',
             'OVERRIDES',
             'METHOD_IMPLEMENTS',
@@ -3707,6 +3723,9 @@ export class LocalBackend {
             'USES_COMPONENT',
             'ROUTE_COMPONENT',
             'USES_CLASS',
+            'READS_STORAGE',
+            'WRITES_STORAGE',
+            'BINDS_STORAGE',
             'METHOD_OVERRIDES',
             'OVERRIDES',
             'METHOD_IMPLEMENTS',
